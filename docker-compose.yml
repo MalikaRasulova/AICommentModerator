@@ -1,0 +1,22 @@
+# Postgres for local runs: docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: aicommentmoderator-db
+    environment:
+      POSTGRES_DB: aicommentmoderator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # 5433 on the host, so a PostgreSQL already installed locally keeps 5432.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

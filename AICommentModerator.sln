@@ -5,6 +5,10 @@ VisualStudioVersion = 17.13.35806.99 d17.13
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AICommentModerator", "AICommentModerator\AICommentModerator.csproj", "{1BBE514E-2A52-4B18-881A-6A8477DD61DC}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{E117A5B0-AC8C-4C68-868E-58BED80900FC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AICommentModerator.Tests", "tests\AICommentModerator.Tests\AICommentModerator.Tests.csproj", "{1F211667-4F13-4271-BB8A-BC0F18905F1B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,11 +19,18 @@ Global
 		{1BBE514E-2A52-4B18-881A-6A8477DD61DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1BBE514E-2A52-4B18-881A-6A8477DD61DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1BBE514E-2A52-4B18-881A-6A8477DD61DC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F211667-4F13-4271-BB8A-BC0F18905F1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F211667-4F13-4271-BB8A-BC0F18905F1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F211667-4F13-4271-BB8A-BC0F18905F1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F211667-4F13-4271-BB8A-BC0F18905F1B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {66964051-3D8F-4175-8631-B14BDA70FB25}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{1F211667-4F13-4271-BB8A-BC0F18905F1B} = {E117A5B0-AC8C-4C68-868E-58BED80900FC}
 	EndGlobalSection
 EndGlobal
