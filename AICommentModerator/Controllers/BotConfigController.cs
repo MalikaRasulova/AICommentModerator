@@ -8,8 +8,13 @@ namespace AICommentModerator.Controllers;
 public class BotConfigController : ControllerBase
 {
     private readonly BotPolicy _policy;
+    private readonly WorkingHoursCalendar _hours;
 
-    public BotConfigController(BotPolicy policy) => _policy = policy;
+    public BotConfigController(BotPolicy policy, WorkingHoursCalendar hours)
+    {
+        _policy = policy;
+        _hours = hours;
+    }
 
     /// <summary>
     /// The configuration the bot is running with right now. bot.config.json is watched,
@@ -47,6 +52,22 @@ public class BotConfigController : ControllerBase
                 maxPerChatPerHour = bot.Replies.MaxRepliesPerChatPerHour,
                 aiWhenNoRuleMatches = bot.Replies.UseAiWhenNoRuleMatches,
                 rules = bot.Replies.Rules.Select(r => new { r.Name, r.Match, patterns = r.Patterns, onlyFor = r.OnlyForUsernames })
+            },
+            workingHours = new
+            {
+                enabled = bot.WorkingHours.Enabled,
+                timeZone = bot.WorkingHours.TimeZone,
+                days = bot.WorkingHours.Days,
+                from = bot.WorkingHours.From,
+                to = bot.WorkingHours.To,
+                holidays = bot.WorkingHours.Holidays,
+                openNow = _hours.IsOpen(),
+                outside = new
+                {
+                    moderate = bot.WorkingHours.Outside.Moderate,
+                    notifyModerators = bot.WorkingHours.Outside.NotifyModerators,
+                    replies = bot.WorkingHours.Outside.Replies
+                }
             },
             perChatOverrides = bot.PerChat.Select(c => new { c.ChatId, c.Enabled, c.RepliesEnabled, c.RespondTo, extraBannedWords = c.ExtraBannedWords })
         });

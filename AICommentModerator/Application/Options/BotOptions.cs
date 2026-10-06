@@ -23,8 +23,52 @@ public sealed class BotOptions
 
     public ReplyOptions Replies { get; set; } = new();
 
+    public WorkingHoursOptions WorkingHours { get; set; } = new();
+
     /// <summary>Per-chat overrides; the first entry matching the chat id wins.</summary>
     public List<ChatOverride> PerChat { get; set; } = new();
+}
+
+/// <summary>When the people behind the bot are actually at work.</summary>
+public sealed class WorkingHoursOptions
+{
+    /// <summary>Off means the bot behaves the same around the clock.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>IANA or Windows id, e.g. "Asia/Tashkent". Falls back to UTC if unknown.</summary>
+    public string TimeZone { get; set; } = "Asia/Tashkent";
+
+    /// <summary>Working days by name: Monday, Tuesday, ... Empty means every day.</summary>
+    public string[] Days { get; set; } = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" };
+
+    /// <summary>Start of the working day, HH:mm.</summary>
+    public string From { get; set; } = "09:00";
+
+    /// <summary>End of the working day, HH:mm. Earlier than From means the shift crosses midnight.</summary>
+    public string To { get; set; } = "18:00";
+
+    /// <summary>Days off on top of the weekly schedule, as yyyy-MM-dd.</summary>
+    public string[] Holidays { get; set; } = Array.Empty<string>();
+
+    public OutsideHoursOptions Outside { get; set; } = new();
+}
+
+/// <summary>What the bot does when the office is closed.</summary>
+public sealed class OutsideHoursOptions
+{
+    /// <summary>Keep deleting rule-breaking comments at night. Usually yes.</summary>
+    public bool Moderate { get; set; } = true;
+
+    /// <summary>Still notify the moderators chat outside working hours.</summary>
+    public bool NotifyModerators { get; set; } = true;
+
+    /// <summary>"Silent" says nothing; "AutoReply" answers once with Message.</summary>
+    public string Replies { get; set; } = "AutoReply";
+
+    public string Message { get; set; } =
+        "Hozir ish vaqtimiz emas. Dushanba-juma, 9:00-18:00 oralig'ida javob beramiz.";
+
+    public bool AutoReplies => string.Equals(Replies, "AutoReply", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Where the bot is allowed to work.</summary>

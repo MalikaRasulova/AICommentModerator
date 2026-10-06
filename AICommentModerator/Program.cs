@@ -73,8 +73,10 @@ else
 
 // ---- bot behaviour -------------------------------------------------------
 builder.Services.AddSingleton<BotPolicy>();
+builder.Services.AddSingleton<WorkingHoursCalendar>();
 builder.Services.AddSingleton<IReplyService>(sp => new ReplyService(
     sp.GetRequiredService<BotPolicy>(),
+    sp.GetRequiredService<WorkingHoursCalendar>(),
     sp.GetRequiredService<ILogger<ReplyService>>(),
     sp.GetService<IReplyGenerator>()));
 
@@ -159,6 +161,9 @@ app.MapGet("/health", (IServiceProvider services) =>
         storage = hasDatabase ? "postgres (falls back to memory)" : "in-memory",
         webhookSecret = string.IsNullOrWhiteSpace(telegramOptions.WebhookSecret) ? "not set" : "set",
         replies = bot.Replies.Enabled ? bot.Replies.RespondTo : "off",
+        workingHours = bot.WorkingHours.Enabled
+            ? $"{bot.WorkingHours.From}-{bot.WorkingHours.To} {bot.WorkingHours.TimeZone} (open now: {services.GetRequiredService<WorkingHoursCalendar>().IsOpen()})"
+            : "around the clock",
         scope = bot.Scope.IsAllowlist ? $"allowlist ({bot.Scope.AllowedChatIds.Length} chats)" : "all chats"
     });
 });

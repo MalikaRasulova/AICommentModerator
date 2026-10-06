@@ -152,6 +152,54 @@ public class TelegramWebhookControllerTests
     }
 
     [Fact]
+    public async Task Outside_working_hours_moderation_can_be_switched_off()
+    {
+        var harness = new Harness(ModerationDecision.Block);
+        harness.Bot.WorkingHours = ClosedSchedule();
+        harness.Bot.WorkingHours.Outside.Moderate = false;
+
+        await harness.Receive(Update("you are an idiot"));
+
+        Assert.Empty(harness.Telegram.Deleted);
+        Assert.Empty(harness.Audit.Entries);
+    }
+
+    [Fact]
+    public async Task Outside_working_hours_moderation_normally_keeps_running()
+    {
+        var harness = new Harness(ModerationDecision.Block);
+        harness.Bot.WorkingHours = ClosedSchedule();
+
+        await harness.Receive(Update("you are an idiot"));
+
+        Assert.Single(harness.Telegram.Deleted);
+        Assert.Single(harness.Audit.Entries);
+    }
+
+    [Fact]
+    public async Task Moderator_notices_can_be_held_back_at_night()
+    {
+        var harness = new Harness(ModerationDecision.Block);
+        harness.Bot.WorkingHours = ClosedSchedule();
+        harness.Bot.WorkingHours.Outside.NotifyModerators = false;
+        harness.Bot.Moderators.ChatId = -500;
+
+        await harness.Receive(Update("you are an idiot"));
+
+        Assert.DoesNotContain(harness.Telegram.Sent, m => m.ChatId == -500);
+    }
+
+    /// <summary>A schedule that is closed at the harness clock (Thursday 10:00 Tashkent).</summary>
+    private static WorkingHoursOptions ClosedSchedule() => new()
+    {
+        Enabled = true,
+        TimeZone = "Asia/Tashkent",
+        Days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" },
+        From = "18:00",
+        To = "23:00"
+    };
+
+    [Fact]
     public async Task Wrong_secret_header_is_rejected()
     {
         var harness = new Harness(ModerationDecision.Block, secret: "expected-secret");
@@ -197,12 +245,15 @@ public class TelegramWebhookControllerTests
 
             var telegramOptions = new TelegramOptions { BotToken = "test-token", WebhookSecret = secret, DeleteBlockedMessages = true };
 
+            var monitor = new TestOptionsMonitor<BotOptions>(Bot);
+
             Controller = new TelegramWebhookController(
                 new FakeModerationService(decision),
                 new FakeReplyService(reply),
+                new WorkingHoursCalendar(monitor) { Now = () => Clock },
                 Telegram,
                 Audit,
-                new BotPolicy(new TestOptionsMonitor<BotOptions>(Bot)),
+                new BotPolicy(monitor),
                 new TestOptionsMonitor<TelegramOptions>(telegramOptions),
                 NullLogger<TelegramWebhookController>.Instance)
             {
@@ -211,6 +262,9 @@ public class TelegramWebhookControllerTests
         }
 
         public BotOptions Bot { get; }
+
+        /// <summary>Thursday 10:00 in Tashkent - inside the default schedule.</summary>
+        public DateTimeOffset Clock { get; set; } = new(2026, 10, 8, 5, 0, 0, TimeSpan.Zero);
 
         public FakeTelegramClient Telegram { get; }
 

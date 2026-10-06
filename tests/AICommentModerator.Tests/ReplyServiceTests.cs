@@ -152,6 +152,53 @@ public class ReplyServiceTests
     }
 
     [Fact]
+    public async Task Outside_working_hours_the_bot_answers_with_the_away_message()
+    {
+        var options = Options();
+        options.WorkingHours = Schedule();
+
+        // Saturday, 22:00 in Tashkent - closed.
+        var saturdayNight = new DateTimeOffset(2026, 10, 10, 17, 0, 0, TimeSpan.Zero);
+        var reply = await Service(options, () => saturdayNight).TryGetReplyAsync(Context("Salom"));
+
+        Assert.Equal("Ish vaqtimiz emas.", reply);
+    }
+
+    [Fact]
+    public async Task Outside_working_hours_the_bot_can_stay_completely_silent()
+    {
+        var options = Options();
+        options.WorkingHours = Schedule();
+        options.WorkingHours.Outside.Replies = "Silent";
+
+        var saturdayNight = new DateTimeOffset(2026, 10, 10, 17, 0, 0, TimeSpan.Zero);
+
+        Assert.Null(await Service(options, () => saturdayNight).TryGetReplyAsync(Context("Salom")));
+    }
+
+    [Fact]
+    public async Task During_working_hours_the_normal_rules_apply()
+    {
+        var options = Options();
+        options.WorkingHours = Schedule();
+
+        // Thursday 10:00 in Tashkent is 05:00 UTC.
+        var thursdayMorning = new DateTimeOffset(2026, 10, 8, 5, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("Salom!", await Service(options, () => thursdayMorning).TryGetReplyAsync(Context("Salom")));
+    }
+
+    private static WorkingHoursOptions Schedule() => new()
+    {
+        Enabled = true,
+        TimeZone = "Asia/Tashkent",
+        Days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" },
+        From = "09:00",
+        To = "18:00",
+        Outside = new OutsideHoursOptions { Replies = "AutoReply", Message = "Ish vaqtimiz emas." }
+    };
+
+    [Fact]
     public async Task A_broken_regex_in_the_config_is_skipped()
     {
         var options = Options();
@@ -182,11 +229,20 @@ public class ReplyServiceTests
         }
     };
 
-    private static ReplyService Service(BotOptions options, Func<DateTimeOffset>? clock = null, IReplyGenerator? generator = null) =>
-        new(new BotPolicy(new TestOptionsMonitor<BotOptions>(options)), NullLogger<ReplyService>.Instance, generator)
+    private static ReplyService Service(BotOptions options, Func<DateTimeOffset>? clock = null, IReplyGenerator? generator = null)
+    {
+        var monitor = new TestOptionsMonitor<BotOptions>(options);
+        var now = clock ?? (() => DateTimeOffset.UtcNow);
+
+        return new ReplyService(
+            new BotPolicy(monitor),
+            new WorkingHoursCalendar(monitor) { Now = now },
+            NullLogger<ReplyService>.Instance,
+            generator)
         {
-            Now = clock ?? (() => DateTimeOffset.UtcNow)
+            Now = now
         };
+    }
 
     private static ReplyContext Context(string text) => new(-100123, 1, "someone", text, false, false);
 

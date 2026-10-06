@@ -14,15 +14,21 @@ public sealed class ReplyService : IReplyService
     private static readonly TimeSpan Hour = TimeSpan.FromHours(1);
 
     private readonly BotPolicy _policy;
+    private readonly WorkingHoursCalendar _hours;
     private readonly IReplyGenerator? _generator;
     private readonly ILogger<ReplyService> _logger;
 
     private readonly ConcurrentDictionary<(long Chat, long User), DateTimeOffset> _lastReply = new();
     private readonly ConcurrentDictionary<long, List<DateTimeOffset>> _chatHistory = new();
 
-    public ReplyService(BotPolicy policy, ILogger<ReplyService> logger, IReplyGenerator? generator = null)
+    public ReplyService(
+        BotPolicy policy,
+        WorkingHoursCalendar hours,
+        ILogger<ReplyService> logger,
+        IReplyGenerator? generator = null)
     {
         _policy = policy;
+        _hours = hours;
         _logger = logger;
         _generator = generator;
     }
@@ -42,6 +48,17 @@ public sealed class ReplyService : IReplyService
 
         if (IsOnCooldown(context, options) || ReachedHourlyLimit(context.ChatId, options))
             return null;
+
+        // Outside working hours the bot either says nothing or says only one thing.
+        if (!_hours.IsOpen())
+        {
+            var outside = _policy.Current.WorkingHours.Outside;
+            if (!outside.AutoReplies || string.IsNullOrWhiteSpace(outside.Message))
+                return null;
+
+            Remember(context);
+            return outside.Message;
+        }
 
         var rule = FindRule(options, context);
         if (rule is not null)

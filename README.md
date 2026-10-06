@@ -197,6 +197,35 @@ comments that passed moderation.
 `UseAiWhenNoRuleMatches` hands anything unmatched to the model, which answers briefly in the
 commenter's own language (`OpenAI:ReplyPrompt` sets the tone).
 
+### Working hours
+
+```json
+"WorkingHours": {
+  "Enabled": false,
+  "TimeZone": "Asia/Tashkent",
+  "Days": [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" ],
+  "From": "09:00",
+  "To": "18:00",                      // earlier than From = a shift through midnight
+  "Holidays": [ "2026-01-01" ],
+
+  "Outside": {
+    "Moderate": true,                 // keep deleting rule-breakers at night
+    "NotifyModerators": true,
+    "Replies": "AutoReply",           // Silent | AutoReply
+    "Message": "Hozir ish vaqtimiz emas. Dushanba-juma, 9:00-18:00 oralig'ida javob beramiz."
+  }
+}
+```
+
+Moderation and replies are separate questions here. Outside the schedule the bot normally
+keeps deleting rule-breaking comments (`Moderate: true`) but stops answering in its usual
+voice: `AutoReply` sends the away message once per person, `Silent` says nothing at all.
+Set `Moderate: false` and the bot ignores the chat entirely until the next working day.
+
+`Enabled: false` — the default — means the bot behaves the same at any hour. An unknown time
+zone falls back to UTC with a warning rather than crashing, and an unreadable `From`/`To` is
+treated as always open.
+
 ### Different rules in one chat
 
 ```json
@@ -234,14 +263,21 @@ the words your own community does not tolerate, in any language.
 ## Tests
 
 ```sh
-dotnet test
+dotnet test                      # 79 unit tests
+pwsh ./scripts/api-test.ps1      # 46 checks against a running instance
 ```
 
-64 tests covering the rule engine (banned words, word boundaries, per-chat words, link spam,
+`scripts/api-test.ps1` starts the service on its own port with an empty connection string,
+so it needs neither PostgreSQL nor a bot token. It walks every endpoint, checks the verdicts
+and the HTTP codes (401 on a wrong webhook secret, 400 on bad input, 404, 405), edits
+`bot.config.json` while the service is running to prove the hot reload, then restores it.
+
+79 unit tests covering the rule engine (banned words, word boundaries, per-chat words, link spam,
 shouting, noise, length), the parsing of model answers including malformed ones, the webhook
 flow (delete on Block, keep on Allow, exempt authors, allowlisted chats, moderator notices,
 wrong secret header), the reply rules (keyword and regex matching, mention-only mode, cooldown,
-hourly ceiling, per-person rules, AI fallback) and the database fallback.
+hourly ceiling, per-person rules, AI fallback), the working-hours calendar (weekends,
+holidays, night shifts across midnight, unknown time zones) and the database fallback.
 
 ## Project layout
 
@@ -275,6 +311,6 @@ API kalitisiz va bazasiz ham to'liq ishlaydi: qoidalar dvigateli va xotiradagi j
 `dotnet run`, so'ng <http://localhost:5165/swagger>.
 
 Botning xulq-atvori `bot.config.json` faylida: qaysi chatlarda ishlasin, kimga tegmasin,
-qoidabuzarlikda nima qilsin va qaysi izohlarga qanday javob bersin. Fayl kuzatiladi —
+qoidabuzarlikda nima qilsin, qaysi izohlarga qanday javob bersin va ish vaqti jadvali. Fayl kuzatiladi —
 o'zgartirish qayta ishga tushirmasdan kuchga kiradi, joriy holatni `GET /api/bot/config`
 ko'rsatadi.

@@ -72,6 +72,26 @@
       ]
     },
 
+    "WorkingHours": {
+      "//": "When the team is actually around. Off = the bot behaves the same at any hour.",
+      "Enabled": false,
+      "TimeZone": "Asia/Tashkent",
+      "Days": [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" ],
+      "From": "09:00",
+      "//To": "Earlier than From means the shift crosses midnight, e.g. 22:00 -> 06:00.",
+      "To": "18:00",
+      "Holidays": [ "2026-01-01", "2026-03-21" ],
+
+      "Outside": {
+        "//Moderate": "Keep deleting rule-breaking comments at night. Usually true.",
+        "Moderate": true,
+        "NotifyModerators": true,
+        "//Replies": "Silent = say nothing | AutoReply = answer once with Message",
+        "Replies": "AutoReply",
+        "Message": "Hozir ish vaqtimiz emas. Dushanba-juma, 9:00-18:00 oralig'ida javob beramiz."
+      }
+    },
+
     "PerChat": [
       {
         "//": "Example: a quieter, stricter chat. Remove or edit freely.",

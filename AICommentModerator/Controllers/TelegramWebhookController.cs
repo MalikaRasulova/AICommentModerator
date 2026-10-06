@@ -17,6 +17,7 @@ public class TelegramWebhookController : ControllerBase
 
     private readonly IModerationService _moderation;
     private readonly IReplyService _replies;
+    private readonly WorkingHoursCalendar _hours;
     private readonly ITelegramClient _telegram;
     private readonly IAuditLog _auditLog;
     private readonly BotPolicy _policy;
@@ -26,6 +27,7 @@ public class TelegramWebhookController : ControllerBase
     public TelegramWebhookController(
         IModerationService moderation,
         IReplyService replies,
+        WorkingHoursCalendar hours,
         ITelegramClient telegram,
         IAuditLog auditLog,
         BotPolicy policy,
@@ -34,6 +36,7 @@ public class TelegramWebhookController : ControllerBase
     {
         _moderation = moderation;
         _replies = replies;
+        _hours = hours;
         _telegram = telegram;
         _auditLog = auditLog;
         _policy = policy;
@@ -82,6 +85,10 @@ public class TelegramWebhookController : ControllerBase
         if (!_policy.HandlesChat(chatId))
             return Ok(new { status = "ignored", reason = "chat out of scope" });
 
+        var open = _hours.IsOpen();
+        if (!open && !bot.WorkingHours.Outside.Moderate)
+            return Ok(new { status = "ignored", reason = "outside working hours" });
+
         var authorId = message.From?.Id ?? 0;
         var username = message.From?.Username;
         var exempt = _policy.IsExempt(authorId, username);
@@ -107,7 +114,8 @@ public class TelegramWebhookController : ControllerBase
                 await _telegram.SendMessageAsync(chatId, warning, cancellationToken: cancellationToken);
             }
 
-            if (actions.NotifyModerators && bot.Moderators.IsConfigured)
+            var notify = actions.NotifyModerators && (open || bot.WorkingHours.Outside.NotifyModerators);
+            if (notify && bot.Moderators.IsConfigured)
                 await NotifyModeratorsAsync(bot, message, text, verdict, cancellationToken);
         }
 
