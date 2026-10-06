@@ -158,6 +158,15 @@ public sealed class ReplyOptions
     /// <summary>Let the model answer when no rule matched. Needs an OpenAI key.</summary>
     public bool UseAiWhenNoRuleMatches { get; set; }
 
+    /// <summary>
+    /// Answer only comments that sit under a channel post in the linked discussion group,
+    /// and stay out of ordinary group chatter. This is the normal setup for a channel.
+    /// </summary>
+    public bool OnlyUnderChannelPosts { get; set; } = true;
+
+    /// <summary>Give the model the post the comment hangs under, so the answer is on topic.</summary>
+    public bool UsePostAsContext { get; set; } = true;
+
     /// <summary>Checked in order; the first match wins.</summary>
     public List<ReplyRule> Rules { get; set; } = new();
 

@@ -43,6 +43,9 @@ public sealed class ReplyService : IReplyService
         if (!options.Enabled || options.Audience == ReplyAudience.Nobody)
             return null;
 
+        if (options.OnlyUnderChannelPosts && !context.IsUnderChannelPost)
+            return null;
+
         if (options.Audience == ReplyAudience.MentionsAndReplies && !context.MentionsBot && !context.IsReplyToBot)
             return null;
 
@@ -72,7 +75,8 @@ public sealed class ReplyService : IReplyService
 
         try
         {
-            var generated = await _generator.GenerateAsync(context.Text, cancellationToken);
+            var postContext = options.UsePostAsContext ? context.PostText : null;
+            var generated = await _generator.GenerateAsync(context.Text, postContext, cancellationToken);
             if (string.IsNullOrWhiteSpace(generated))
                 return null;
 

@@ -135,7 +135,32 @@ try {
     $r = Call GET "/api/moderation/recent?take=99999"
     Check "take=99999 -> 200 (clamp)" ($r.Status -eq 200)
 
-    "=== 6. Ish vaqti (config hot reload bilan) ==="
+    "=== 6. Kanal + muhokama guruhi oqimi ==="
+    $post = '{"update_id":300,"message":{"message_id":500,"chat":{"id":42,"type":"supergroup"},' +
+            '"sender_chat":{"id":-1009,"type":"channel","title":"Kanal"},"is_automatic_forward":true,' +
+            '"text":"Yangi mahsulot chiqdi, narxi 500 000 som"}}'
+    $r = Call POST "/api/telegram/webhook" $post $secret
+    $w = $r.Body | ConvertFrom-Json
+    Check "kanal posti moderatsiyadan o'tmaydi" ($w.reason -eq "channel post in the discussion group") "reason=$($w.reason)"
+
+    $cfgAfter = (Call GET "/api/bot/config").Body | ConvertFrom-Json
+    Check "post eslab qolindi" ($cfgAfter.replies.posts_remembered -ge 1) "count=$($cfgAfter.replies.posts_remembered)"
+    Check "faqat post ostidagi izohlar" ($cfgAfter.replies.only_under_channel_posts -eq $true)
+    Check "post kontekst sifatida" ($cfgAfter.replies.use_post_as_context -eq $true)
+
+    $comment = '{"update_id":301,"message":{"message_id":501,"chat":{"id":42,"type":"supergroup"},' +
+               '"from":{"id":7,"username":"xaridor","is_bot":false},"message_thread_id":500,' +
+               '"text":"Bu qachon sotuvga chiqadi?"}}'
+    $r = Call POST "/api/telegram/webhook" $comment $secret
+    $w = $r.Body | ConvertFrom-Json
+    Check "post ostidagi izoh qayta ishlandi" ($w.status -eq "processed" -and $w.decision -eq "allow") "$($w.status)/$($w.decision)"
+
+    $channelSpam = '{"update_id":302,"message":{"message_id":502,"chat":{"id":42,"type":"supergroup"},' +
+                   '"sender_chat":{"id":-1009,"type":"channel"},"text":"https://a.uz https://b.uz https://c.uz"}}'
+    $r = Call POST "/api/telegram/webhook" $channelSpam $secret
+    Check "kanal nomidan yozilgani tegilmaydi" ((($r.Body | ConvertFrom-Json).reason) -eq "posted by a channel")
+
+    "=== 7. Ish vaqti (config hot reload bilan) ==="
     $closed = $cfgBackup -replace '"Enabled": false,\s*\r?\n(\s*)"TimeZone"', '"Enabled": true,
 $1"TimeZone"'
     $closed = $closed -replace '"From": "09:00"', '"From": "23:30"' -replace '"To": "18:00"', '"To": "23:45"'
@@ -155,7 +180,7 @@ $1"TimeZone"'
     $cfg3 = (Call GET "/api/bot/config").Body | ConvertFrom-Json
     Check "config qaytarildi" ($cfg3.working_hours.enabled -eq $false)
 
-    "=== 7. Boshqalar ==="
+    "=== 8. Boshqalar ==="
     Check "swagger ochiladi" ((Call GET "/swagger/index.html").Status -eq 200)
     Check "noma'lum yo'l -> 404" ((Call GET "/api/yoq-bunday-narsa").Status -eq 404)
     Check "buzuq JSON -> 400" ((Call POST "/api/telegram/check" "{buzuq json").Status -eq 400)

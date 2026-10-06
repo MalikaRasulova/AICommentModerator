@@ -199,6 +199,43 @@ public class ReplyServiceTests
     };
 
     [Fact]
+    public async Task Ordinary_group_chatter_is_left_alone()
+    {
+        var options = Options();
+        var plainChat = Context("Salom") with { IsUnderChannelPost = false, PostText = null };
+
+        Assert.Null(await Service(options).TryGetReplyAsync(plainChat));
+
+        options.Replies.OnlyUnderChannelPosts = false;
+        Assert.Equal("Salom!", await Service(options).TryGetReplyAsync(plainChat));
+    }
+
+    [Fact]
+    public async Task The_model_is_shown_the_post_the_comment_hangs_under()
+    {
+        var options = Options();
+        options.Replies.UseAiWhenNoRuleMatches = true;
+
+        var generator = new FixedGenerator("Javob");
+        await Service(options, generator: generator).TryGetReplyAsync(Context("Bu qachon chiqadi?"));
+
+        Assert.Equal("Yangi mahsulot haqida post", generator.SawPost);
+    }
+
+    [Fact]
+    public async Task The_post_can_be_withheld_from_the_model()
+    {
+        var options = Options();
+        options.Replies.UseAiWhenNoRuleMatches = true;
+        options.Replies.UsePostAsContext = false;
+
+        var generator = new FixedGenerator("Javob");
+        await Service(options, generator: generator).TryGetReplyAsync(Context("Bu qachon chiqadi?"));
+
+        Assert.Null(generator.SawPost);
+    }
+
+    [Fact]
     public async Task A_broken_regex_in_the_config_is_skipped()
     {
         var options = Options();
@@ -244,7 +281,9 @@ public class ReplyServiceTests
         };
     }
 
-    private static ReplyContext Context(string text) => new(-100123, 1, "someone", text, false, false);
+    /// <summary>A comment under a channel post - the normal case for this bot.</summary>
+    private static ReplyContext Context(string text) =>
+        new(-100123, 1, "someone", text, false, false, IsUnderChannelPost: true, PostText: "Yangi mahsulot haqida post");
 
     private sealed class FixedGenerator : IReplyGenerator
     {
@@ -252,13 +291,18 @@ public class ReplyServiceTests
 
         public FixedGenerator(string reply) => _reply = reply;
 
-        public Task<string?> GenerateAsync(string comment, CancellationToken cancellationToken = default) =>
-            Task.FromResult<string?>(_reply);
+        public string? SawPost { get; private set; }
+
+        public Task<string?> GenerateAsync(string comment, string? postText = null, CancellationToken cancellationToken = default)
+        {
+            SawPost = postText;
+            return Task.FromResult<string?>(_reply);
+        }
     }
 
     private sealed class ThrowingGenerator : IReplyGenerator
     {
-        public Task<string?> GenerateAsync(string comment, CancellationToken cancellationToken = default) =>
+        public Task<string?> GenerateAsync(string comment, string? postText = null, CancellationToken cancellationToken = default) =>
             throw new HttpRequestException("model unreachable");
     }
 }

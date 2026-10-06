@@ -18,6 +18,7 @@ public class TelegramWebhookController : ControllerBase
     private readonly IModerationService _moderation;
     private readonly IReplyService _replies;
     private readonly WorkingHoursCalendar _hours;
+    private readonly DiscussionThreads _threads;
     private readonly ITelegramClient _telegram;
     private readonly IAuditLog _auditLog;
     private readonly BotPolicy _policy;
@@ -28,6 +29,7 @@ public class TelegramWebhookController : ControllerBase
         IModerationService moderation,
         IReplyService replies,
         WorkingHoursCalendar hours,
+        DiscussionThreads threads,
         ITelegramClient telegram,
         IAuditLog auditLog,
         BotPolicy policy,
@@ -37,6 +39,7 @@ public class TelegramWebhookController : ControllerBase
         _moderation = moderation;
         _replies = replies;
         _hours = hours;
+        _threads = threads;
         _telegram = telegram;
         _auditLog = auditLog;
         _policy = policy;
@@ -73,6 +76,18 @@ public class TelegramWebhookController : ControllerBase
 
         var message = update.AnyMessage;
         var text = message?.Body;
+
+        // The copy of a channel post that Telegram pushes into the discussion group is not a
+        // comment - it is the thing people comment on. Remember it, then let it be.
+        if (message is { IsAutomaticForward: true, Chat: not null })
+        {
+            _threads.Remember(message.Chat.Id, message.MessageId, text);
+            return Ok(new { status = "ignored", reason = "channel post in the discussion group" });
+        }
+
+        // A channel speaking as itself in the group is not a member to moderate either.
+        if (message?.SenderChat is not null && message.From is null)
+            return Ok(new { status = "ignored", reason = "posted by a channel" });
 
         // Service messages, stickers and photos without a caption carry nothing to moderate.
         if (message?.Chat is null || string.IsNullOrWhiteSpace(text))
@@ -154,13 +169,24 @@ public class TelegramWebhookController : ControllerBase
         var mentionsBot = !string.IsNullOrWhiteSpace(botUsername) &&
                           text.Contains("@" + botUsername, StringComparison.OrdinalIgnoreCase);
 
+        var chatId = message.Chat!.Id;
+        var threadId = message.ThreadId;
+        var postText = _threads.Find(chatId, threadId);
+
+        // Either we saw the post go by, or the comment answers an automatically forwarded one.
+        var underChannelPost = postText is not null ||
+                               message.ReplyToMessage?.IsAutomaticForward == true ||
+                               message.ReplyToMessage?.SenderChat is not null;
+
         var context = new ReplyContext(
-            message.Chat!.Id,
+            chatId,
             message.From?.Id ?? 0,
             message.From?.Username,
             text,
             mentionsBot,
-            message.ReplyToMessage?.From?.IsBot == true);
+            message.ReplyToMessage?.From?.IsBot == true,
+            underChannelPost,
+            postText ?? message.ReplyToMessage?.Body);
 
         var reply = await _replies.TryGetReplyAsync(context, cancellationToken);
         if (string.IsNullOrWhiteSpace(reply))

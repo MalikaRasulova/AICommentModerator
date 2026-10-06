@@ -37,12 +37,16 @@
 
     "Replies": {
       "Enabled": true,
-      "//RespondTo": "Nobody | MentionsAndReplies | Everyone",
-      "RespondTo": "MentionsAndReplies",
+      "//RespondTo": "Nobody | MentionsAndReplies | Everyone. Everyone = every comment under a post.",
+      "RespondTo": "Everyone",
       "CooldownSeconds": 30,
       "MaxRepliesPerChatPerHour": 20,
       "//UseAiWhenNoRuleMatches": "Needs an OpenAI key; answers in the commenter's language.",
-      "UseAiWhenNoRuleMatches": false,
+      "UseAiWhenNoRuleMatches": true,
+      "//OnlyUnderChannelPosts": "Answer comments under channel posts, ignore ordinary group chatter.",
+      "OnlyUnderChannelPosts": true,
+      "//UsePostAsContext": "Show the model the post, so the answer is about the post.",
+      "UsePostAsContext": true,
 
       "Rules": [
         {

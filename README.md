@@ -1,8 +1,23 @@
 # AICommentModerator
 
-A Telegram comment moderator built on ASP.NET Core 8. Telegram posts an update to the
-webhook, the comment is judged, offending messages are deleted from the chat, and every
-decision is written to an audit log you can read back over HTTP.
+A bot for a Telegram **channel and its linked discussion group**, built on ASP.NET Core 8.
+When someone comments under a channel post, the bot reads the comment, answers it with the
+post in hand, and removes what breaks the house rules — every decision kept in an audit log
+you can read back over HTTP.
+
+```
+Channel post ──auto-forward──▶ discussion group      (the bot remembers the post)
+                                     │
+                        someone comments under it
+                                     │
+                                     ▼
+                          moderate ──Block──▶ delete + warn + notify moderators
+                                     │
+                                  (passes)
+                                     ▼
+                     reply rule, or an answer written by the model
+                     with the post as context, in the commenter's language
+```
 
 Two engines decide together:
 
@@ -92,6 +107,29 @@ dotnet user-secrets set "Telegram:WebhookSecret" "$(openssl rand -hex 16)"
 In production the same values come from environment variables:
 `OpenAI__ApiKey`, `Telegram__BotToken`, `Telegram__WebhookSecret`.
 
+## Setting up the channel and its discussion group
+
+1. In the channel: **Manage channel → Discussion** and link (or create) a group. Telegram now
+   copies every post into that group, and the replies under that copy are the comments.
+2. Add the bot to the **discussion group** as an administrator with **Delete messages**
+   (and **Ban users** if you plan to use it later). It does not need to be in the channel.
+3. In @BotFather: **Group Privacy → Turn off**, otherwise the bot only sees messages that
+   mention it.
+
+The bot tells the three kinds of message apart by itself:
+
+| What arrives | What the bot does |
+|---|---|
+| The channel's post copied into the group (`is_automatic_forward`) | Remembers its text as the topic of that thread, moderates nothing |
+| Anything else posted by the channel itself (`sender_chat`) | Leaves it alone |
+| A person's comment in the thread | Moderates it, then answers it |
+
+`Replies.OnlyUnderChannelPosts` (on by default) keeps the bot to comment threads, so ordinary
+chatter in the same group is moderated but never answered. `Replies.UsePostAsContext` hands the
+remembered post to the model, which is what makes the answer about the post rather than about
+the sentence alone. The last 500 posts are kept in memory; after a restart the bot answers from
+the comment alone until new posts come in.
+
 ## Pointing Telegram at the service
 
 The webhook needs a public HTTPS URL; [ngrok](https://ngrok.com) is enough for testing:
@@ -174,7 +212,9 @@ for the warning posted in the chat.
   "RespondTo": "MentionsAndReplies",   // Nobody | MentionsAndReplies | Everyone
   "CooldownSeconds": 30,               // per person, per chat
   "MaxRepliesPerChatPerHour": 20,      // ceiling for the whole chat
-  "UseAiWhenNoRuleMatches": false,     // needs an OpenAI key
+  "UseAiWhenNoRuleMatches": true,      // needs an OpenAI key
+  "OnlyUnderChannelPosts": true,       // ignore ordinary group chatter
+  "UsePostAsContext": true,            // let the model see the post being discussed
 
   "Rules": [
     {
@@ -195,7 +235,8 @@ the cooldown, blocked comments are never answered at all, and `Everyone` only ev
 comments that passed moderation.
 
 `UseAiWhenNoRuleMatches` hands anything unmatched to the model, which answers briefly in the
-commenter's own language (`OpenAI:ReplyPrompt` sets the tone).
+commenter's own language (`OpenAI:ReplyPrompt` sets the tone). Rules stay useful next to it:
+a fixed price list or opening hours should not be improvised by a model.
 
 ### Working hours
 
@@ -263,8 +304,8 @@ the words your own community does not tolerate, in any language.
 ## Tests
 
 ```sh
-dotnet test                      # 79 unit tests
-pwsh ./scripts/api-test.ps1      # 46 checks against a running instance
+dotnet test                      # 89 unit tests
+pwsh ./scripts/api-test.ps1      # 52 checks against a running instance
 ```
 
 `scripts/api-test.ps1` starts the service on its own port with an empty connection string,
@@ -272,12 +313,14 @@ so it needs neither PostgreSQL nor a bot token. It walks every endpoint, checks 
 and the HTTP codes (401 on a wrong webhook secret, 400 on bad input, 404, 405), edits
 `bot.config.json` while the service is running to prove the hot reload, then restores it.
 
-79 unit tests covering the rule engine (banned words, word boundaries, per-chat words, link spam,
+89 unit tests covering the rule engine (banned words, word boundaries, per-chat words, link spam,
 shouting, noise, length), the parsing of model answers including malformed ones, the webhook
 flow (delete on Block, keep on Allow, exempt authors, allowlisted chats, moderator notices,
 wrong secret header), the reply rules (keyword and regex matching, mention-only mode, cooldown,
 hourly ceiling, per-person rules, AI fallback), the working-hours calendar (weekends,
-holidays, night shifts across midnight, unknown time zones) and the database fallback.
+holidays, night shifts across midnight, unknown time zones), the discussion-group flow
+(the forwarded post is remembered and not moderated, a comment in that thread is answered with
+the post as context, messages sent by the channel itself are skipped) and the database fallback.
 
 ## Project layout
 
@@ -303,9 +346,12 @@ docker-compose.yml    PostgreSQL for local runs
 
 ### Qisqacha (UZ)
 
-Telegram izohlarini moderatsiya qiladigan ASP.NET Core 8 xizmati. Webhook izohni qabul qiladi,
-qoidalar va OpenAI modeli uni baholaydi, qoidabuzar xabar chatdan o'chiriladi, har bir qaror
-audit jurnaliga yoziladi.
+Telegram kanali va unga ulangan muhokama guruhi uchun bot (ASP.NET Core 8). Kanal posti ostiga
+izoh yozilganda bot izohni o'qiydi, postning o'zini kontekst sifatida olib AI orqali javob
+yozadi, qoidabuzar izohlarni esa o'chiradi. Har bir qaror audit jurnaliga tushadi.
+
+Kanalni muhokama guruhiga ulang, botni guruhga admin qilib qo'shing (xabarlarni o'chirish
+huquqi bilan) va @BotFather'da Group Privacy'ni o'chiring.
 
 API kalitisiz va bazasiz ham to'liq ishlaydi: qoidalar dvigateli va xotiradagi jurnal yetarli —
 `dotnet run`, so'ng <http://localhost:5165/swagger>.

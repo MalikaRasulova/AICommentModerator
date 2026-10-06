@@ -200,6 +200,76 @@ public class TelegramWebhookControllerTests
     };
 
     [Fact]
+    public async Task The_forwarded_channel_post_is_remembered_not_moderated()
+    {
+        var harness = new Harness(ModerationDecision.Block);
+
+        var post = new TelegramUpdate
+        {
+            Message = new TelegramMessage
+            {
+                MessageId = 500,
+                Chat = new TelegramChat { Id = 42, Type = "supergroup" },
+                SenderChat = new TelegramChat { Id = -1009, Type = "channel", Title = "Kanal" },
+                IsAutomaticForward = true,
+                Text = "Yangi mahsulot chiqdi"
+            }
+        };
+
+        var result = await harness.Receive(post);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Empty(harness.Audit.Entries);
+        Assert.Empty(harness.Telegram.Deleted);
+        Assert.Equal("Yangi mahsulot chiqdi", harness.Threads.Find(42, 500));
+    }
+
+    [Fact]
+    public async Task A_comment_under_that_post_is_answered_with_the_post_in_hand()
+    {
+        var harness = new Harness(ModerationDecision.Allow, reply: "Tez orada!");
+        harness.Threads.Remember(42, 500, "Yangi mahsulot chiqdi");
+
+        var comment = new TelegramUpdate
+        {
+            Message = new TelegramMessage
+            {
+                MessageId = 501,
+                Chat = new TelegramChat { Id = 42, Type = "supergroup" },
+                From = new TelegramUser { Id = 5, Username = "someone" },
+                MessageThreadId = 500,
+                Text = "Bu qachon sotuvga chiqadi?"
+            }
+        };
+
+        await harness.Receive(comment);
+
+        Assert.Contains(harness.Telegram.Sent, m => m.Text == "Tez orada!" && m.ReplyTo == 501);
+    }
+
+    [Fact]
+    public async Task A_message_posted_by_the_channel_itself_is_skipped()
+    {
+        var harness = new Harness(ModerationDecision.Block);
+
+        var update = new TelegramUpdate
+        {
+            Message = new TelegramMessage
+            {
+                MessageId = 600,
+                Chat = new TelegramChat { Id = 42, Type = "supergroup" },
+                SenderChat = new TelegramChat { Id = -1009, Type = "channel" },
+                Text = "https://a.uz https://b.uz https://c.uz"
+            }
+        };
+
+        await harness.Receive(update);
+
+        Assert.Empty(harness.Telegram.Deleted);
+        Assert.Empty(harness.Audit.Entries);
+    }
+
+    [Fact]
     public async Task Wrong_secret_header_is_rejected()
     {
         var harness = new Harness(ModerationDecision.Block, secret: "expected-secret");
@@ -251,6 +321,7 @@ public class TelegramWebhookControllerTests
                 new FakeModerationService(decision),
                 new FakeReplyService(reply),
                 new WorkingHoursCalendar(monitor) { Now = () => Clock },
+                Threads,
                 Telegram,
                 Audit,
                 new BotPolicy(monitor),
@@ -262,6 +333,8 @@ public class TelegramWebhookControllerTests
         }
 
         public BotOptions Bot { get; }
+
+        public DiscussionThreads Threads { get; } = new();
 
         /// <summary>Thursday 10:00 in Tashkent - inside the default schedule.</summary>
         public DateTimeOffset Clock { get; set; } = new(2026, 10, 8, 5, 0, 0, TimeSpan.Zero);
@@ -291,8 +364,13 @@ public class TelegramWebhookControllerTests
 
         public FakeReplyService(string? reply) => _reply = reply;
 
-        public Task<string?> TryGetReplyAsync(ReplyContext context, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_reply);
+        public ReplyContext? LastContext { get; private set; }
+
+        public Task<string?> TryGetReplyAsync(ReplyContext context, CancellationToken cancellationToken = default)
+        {
+            LastContext = context;
+            return Task.FromResult(_reply);
+        }
     }
 
     private sealed class FakeTelegramClient : ITelegramClient

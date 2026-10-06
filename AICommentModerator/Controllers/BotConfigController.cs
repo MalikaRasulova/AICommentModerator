@@ -9,11 +9,13 @@ public class BotConfigController : ControllerBase
 {
     private readonly BotPolicy _policy;
     private readonly WorkingHoursCalendar _hours;
+    private readonly DiscussionThreads _threads;
 
-    public BotConfigController(BotPolicy policy, WorkingHoursCalendar hours)
+    public BotConfigController(BotPolicy policy, WorkingHoursCalendar hours, DiscussionThreads threads)
     {
         _policy = policy;
         _hours = hours;
+        _threads = threads;
     }
 
     /// <summary>
@@ -51,6 +53,9 @@ public class BotConfigController : ControllerBase
                 cooldownSeconds = bot.Replies.CooldownSeconds,
                 maxPerChatPerHour = bot.Replies.MaxRepliesPerChatPerHour,
                 aiWhenNoRuleMatches = bot.Replies.UseAiWhenNoRuleMatches,
+                onlyUnderChannelPosts = bot.Replies.OnlyUnderChannelPosts,
+                usePostAsContext = bot.Replies.UsePostAsContext,
+                postsRemembered = _threads.Count,
                 rules = bot.Replies.Rules.Select(r => new { r.Name, r.Match, patterns = r.Patterns, onlyFor = r.OnlyForUsernames })
             },
             workingHours = new

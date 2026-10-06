@@ -7,10 +7,14 @@ namespace AICommentModerator.Application.Bot;
 /// <param name="Text">The comment itself.</param>
 /// <param name="MentionsBot">The comment contains @thebot.</param>
 /// <param name="IsReplyToBot">The comment answers one of the bot's own messages.</param>
+/// <param name="IsUnderChannelPost">The comment sits in a thread under a channel post.</param>
+/// <param name="PostText">The channel post being commented on, when it is known.</param>
 public sealed record ReplyContext(
     long ChatId,
     long UserId,
     string? Username,
     string Text,
     bool MentionsBot,
-    bool IsReplyToBot);
+    bool IsReplyToBot,
+    bool IsUnderChannelPost = false,
+    string? PostText = null);

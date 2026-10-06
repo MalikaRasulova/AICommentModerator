@@ -26,22 +26,32 @@ public sealed class OpenAiReplyGenerator : IReplyGenerator
         _logger = logger;
     }
 
-    public async Task<string?> GenerateAsync(string comment, CancellationToken cancellationToken = default)
+    public async Task<string?> GenerateAsync(string comment, string? postText = null, CancellationToken cancellationToken = default)
     {
         var options = _options.CurrentValue;
         if (!options.IsConfigured)
             return null;
+
+        var messages = new List<object> { new { role = "system", content = options.ReplyPrompt } };
+
+        if (!string.IsNullOrWhiteSpace(postText))
+        {
+            // The comment is an answer to a post; the model needs to see what was posted.
+            messages.Add(new
+            {
+                role = "system",
+                content = "The post being commented on:\n" + Shorten(postText, 1500)
+            });
+        }
+
+        messages.Add(new { role = "user", content = comment });
 
         var request = new
         {
             model = options.Model,
             temperature = 0.4,
             max_tokens = 200,
-            messages = new object[]
-            {
-                new { role = "system", content = options.ReplyPrompt },
-                new { role = "user", content = comment }
-            }
+            messages = messages.ToArray()
         };
 
         using var message = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
@@ -69,6 +79,9 @@ public sealed class OpenAiReplyGenerator : IReplyGenerator
             return null;
         }
     }
+
+    private static string Shorten(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "...";
 
     private sealed class Completion
     {

@@ -74,6 +74,7 @@ else
 // ---- bot behaviour -------------------------------------------------------
 builder.Services.AddSingleton<BotPolicy>();
 builder.Services.AddSingleton<WorkingHoursCalendar>();
+builder.Services.AddSingleton<DiscussionThreads>();
 builder.Services.AddSingleton<IReplyService>(sp => new ReplyService(
     sp.GetRequiredService<BotPolicy>(),
     sp.GetRequiredService<WorkingHoursCalendar>(),
