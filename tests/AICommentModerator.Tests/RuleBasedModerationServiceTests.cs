@@ -1,7 +1,6 @@
 using AICommentModerator.Application.Models;
 using AICommentModerator.Application.Moderation;
 using AICommentModerator.Application.Options;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace AICommentModerator.Tests;
@@ -18,7 +17,7 @@ public class RuleBasedModerationServiceTests
         };
 
         configure?.Invoke(options);
-        return new RuleBasedModerationService(new StaticOptionsMonitor<ModerationOptions>(options));
+        return new RuleBasedModerationService(new TestOptionsMonitor<ModerationOptions>(options));
     }
 
     [Theory]
@@ -112,25 +111,22 @@ public class RuleBasedModerationServiceTests
     }
 
     [Fact]
+    public void A_chat_can_add_its_own_banned_words()
+    {
+        var service = Create();
+
+        Assert.Equal(ModerationDecision.Allow, service.Evaluate("no spoilers here please").Decision);
+
+        var result = service.Evaluate("no spoilers here please", new[] { "spoilers" });
+        Assert.Equal(ModerationDecision.Block, result.Decision);
+        Assert.Contains(result.Categories, c => c.StartsWith("banned-word"));
+    }
+
+    [Fact]
     public void Empty_text_is_allowed()
     {
         var result = Create().Evaluate("   ");
         Assert.Equal(ModerationDecision.Allow, result.Decision);
     }
 
-    private sealed class StaticOptionsMonitor<T> : IOptionsMonitor<T>
-    {
-        public StaticOptionsMonitor(T value) => CurrentValue = value;
-
-        public T CurrentValue { get; }
-
-        public T Get(string? name) => CurrentValue;
-
-        public IDisposable OnChange(Action<T, string?> listener) => new Noop();
-
-        private sealed class Noop : IDisposable
-        {
-            public void Dispose() { }
-        }
-    }
 }

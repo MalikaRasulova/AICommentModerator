@@ -119,10 +119,98 @@ admin right, and turn group privacy off in @BotFather so it can see every commen
 | `POST` | `/api/telegram/webhook` | Telegram updates. Validates the secret header, moderates, deletes, logs. |
 | `POST` | `/api/telegram/check` | Moderate a piece of text without touching Telegram. `{"text":"..."}` |
 | `GET` | `/api/moderation/recent?take=50` | Latest decisions, newest first. |
+| `GET` | `/api/bot/config` | The bot configuration currently in effect. |
 | `GET` | `/health` | Which engines and storage are active. |
 | `GET` | `/swagger` | API explorer (Development only). |
 
-## Configuration
+## Bot behaviour — `bot.config.json`
+
+Who the bot watches, who it leaves alone, what it does after each verdict and which comments
+it answers all live in `bot.config.json`, separate from the technical settings. The file is
+watched, so **edits take effect without a restart** — `GET /api/bot/config` shows what is in
+effect right now.
+
+### Where it works
+
+```json
+"Scope": {
+  "Mode": "AllChats",          // or "Allowlist"
+  "AllowedChatIds": [ -1001234567890 ],
+  "IgnoreBots": true,          // never moderate another bot
+  "IgnoreChannelPosts": true,  // skip the channel owner's own posts
+  "IgnoreEditedMessages": false
+}
+```
+
+### Who it never touches
+
+```json
+"Exempt": {
+  "Usernames": [ "malika53" ], // without the @, case-insensitive
+  "UserIds": [ 123456789 ],
+  "SkipModeration": true       // false = still judged, just never deleted
+}
+```
+
+### What happens after a verdict
+
+```json
+"Actions": {
+  "OnBlock": { "Delete": true,  "WarnAuthor": true,  "NotifyModerators": true },
+  "OnFlag":  { "Delete": false, "WarnAuthor": false, "NotifyModerators": true },
+  "OnAllow": { "Delete": false, "WarnAuthor": false, "NotifyModerators": false }
+}
+```
+
+Notifications go to `Moderators.ChatId` (0 turns them off). Both templates take placeholders:
+`{decision}`, `{reason}`, `{author}`, `{chat}`, `{text}` for the moderator note, and `{reason}`
+for the warning posted in the chat.
+
+### Which comments get an answer
+
+```json
+"Replies": {
+  "Enabled": true,
+  "RespondTo": "MentionsAndReplies",   // Nobody | MentionsAndReplies | Everyone
+  "CooldownSeconds": 30,               // per person, per chat
+  "MaxRepliesPerChatPerHour": 20,      // ceiling for the whole chat
+  "UseAiWhenNoRuleMatches": false,     // needs an OpenAI key
+
+  "Rules": [
+    {
+      "Name": "price",
+      "Match": "Regex",                 // or "Keyword" (whole word, case-insensitive)
+      "Patterns": [ "narx|qancha turadi|сколько стоит|price" ],
+      "Reply": "Narxlar haqida to'liq ma'lumotni shaxsiy xabarda yuboramiz.",
+      "OnlyForUsernames": []            // empty = anyone
+    }
+  ]
+}
+```
+
+Rules are checked in order and the first match wins. `OnlyForUsernames` makes a rule personal —
+useful for answering a client or a colleague differently from everyone else. A rule with a
+broken regex is skipped rather than taking the bot down. Nothing is ever answered twice inside
+the cooldown, blocked comments are never answered at all, and `Everyone` only ever applies to
+comments that passed moderation.
+
+`UseAiWhenNoRuleMatches` hands anything unmatched to the model, which answers briefly in the
+commenter's own language (`OpenAI:ReplyPrompt` sets the tone).
+
+### Different rules in one chat
+
+```json
+"PerChat": [
+  {
+    "ChatId": -1001234567890,
+    "Enabled": true,            // false switches the bot off in this chat only
+    "RepliesEnabled": false,    // moderate, but stay silent here
+    "ExtraBannedWords": [ "spoiler" ]
+  }
+]
+```
+
+## Technical settings — `appsettings.json`
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -149,9 +237,11 @@ the words your own community does not tolerate, in any language.
 dotnet test
 ```
 
-Covers the rule engine (banned words, word boundaries, link spam, shouting, noise, length),
-the parsing of model answers including malformed ones, and the webhook flow — delete on
-Block, keep on Allow, ignore bot and empty messages, reject a wrong secret header.
+64 tests covering the rule engine (banned words, word boundaries, per-chat words, link spam,
+shouting, noise, length), the parsing of model answers including malformed ones, the webhook
+flow (delete on Block, keep on Allow, exempt authors, allowlisted chats, moderator notices,
+wrong secret header), the reply rules (keyword and regex matching, mention-only mode, cooldown,
+hourly ceiling, per-person rules, AI fallback) and the database fallback.
 
 ## Project layout
 
@@ -169,6 +259,7 @@ docker-compose.yml    PostgreSQL for local runs
 
 - `global.json` pins the .NET 8 SDK; the project targets `net8.0`.
 - `NuGet.config` restricts restore to nuget.org so a private company feed cannot break it.
+- API responses use snake_case, because the same serializer reads Telegram's snake_case updates.
 - The webhook always answers `200 OK` quickly — Telegram retries anything else — except for a
   failed secret check, which is `401`.
 
@@ -181,4 +272,9 @@ qoidalar va OpenAI modeli uni baholaydi, qoidabuzar xabar chatdan o'chiriladi, h
 audit jurnaliga yoziladi.
 
 API kalitisiz va bazasiz ham to'liq ishlaydi: qoidalar dvigateli va xotiradagi jurnal yetarli —
-`dotnet run`, so'ng <http://localhost:5165/swagger>. Sozlamalar yuqoridagi jadvalda.
+`dotnet run`, so'ng <http://localhost:5165/swagger>.
+
+Botning xulq-atvori `bot.config.json` faylida: qaysi chatlarda ishlasin, kimga tegmasin,
+qoidabuzarlikda nima qilsin va qaysi izohlarga qanday javob bersin. Fayl kuzatiladi —
+o'zgartirish qayta ishga tushirmasdan kuchga kiradi, joriy holatni `GET /api/bot/config`
+ko'rsatadi.

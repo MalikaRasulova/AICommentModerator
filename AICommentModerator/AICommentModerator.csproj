@@ -21,4 +21,10 @@
     <InternalsVisibleTo Include="AICommentModerator.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="bot.config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

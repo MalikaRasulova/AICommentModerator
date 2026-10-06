@@ -39,9 +39,12 @@ public sealed class OpenAiModerationService : IModerationService
         _logger = logger;
     }
 
-    public async Task<ModerationResult> ModerateAsync(string text, CancellationToken cancellationToken = default)
+    public async Task<ModerationResult> ModerateAsync(
+        string text,
+        IReadOnlyCollection<string>? extraBannedWords = null,
+        CancellationToken cancellationToken = default)
     {
-        var ruleVerdict = _rules.Evaluate(text);
+        var ruleVerdict = _rules.Evaluate(text, extraBannedWords);
         if (ruleVerdict.Decision == ModerationDecision.Block)
             return ruleVerdict;
 

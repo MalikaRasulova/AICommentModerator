@@ -22,5 +22,11 @@ public sealed class OpenAiOptions
         "Flag borderline cases such as heated arguments or possible spam. " +
         "Allow ordinary criticism, questions and off-topic small talk.";
 
+    /// <summary>System prompt used when the bot answers a comment itself.</summary>
+    public string ReplyPrompt { get; set; } =
+        "You answer comments under a company's posts. Be brief - two sentences at most - " +
+        "polite and factual. Answer in the language the comment is written in. " +
+        "If you do not know something, say that a human will follow up.";
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
 }

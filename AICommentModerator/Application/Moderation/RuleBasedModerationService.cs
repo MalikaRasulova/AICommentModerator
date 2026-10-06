@@ -26,12 +26,18 @@ public sealed class RuleBasedModerationService : IModerationService
 
     public RuleBasedModerationService(IOptionsMonitor<ModerationOptions> options) => _options = options;
 
-    public Task<ModerationResult> ModerateAsync(string text, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Evaluate(text));
+    public Task<ModerationResult> ModerateAsync(
+        string text,
+        IReadOnlyCollection<string>? extraBannedWords = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(Evaluate(text, extraBannedWords));
 
-    public ModerationResult Evaluate(string text)
+    public ModerationResult Evaluate(string text, IReadOnlyCollection<string>? extraBannedWords = null)
     {
         var options = _options.CurrentValue;
+        var banned = extraBannedWords is { Count: > 0 }
+            ? options.BannedWords.Concat(extraBannedWords).ToArray()
+            : options.BannedWords;
 
         if (string.IsNullOrWhiteSpace(text))
             return ModerationResult.Allowed(SourceName, "Empty comment");
@@ -39,7 +45,7 @@ public sealed class RuleBasedModerationService : IModerationService
         var blocked = new List<string>();
         var flagged = new List<string>();
 
-        if (ContainsAny(text, options.BannedWords, out var bannedHit))
+        if (ContainsAny(text, banned, out var bannedHit))
             blocked.Add($"banned-word:{bannedHit}");
 
         if (text.Length > options.MaxLength)

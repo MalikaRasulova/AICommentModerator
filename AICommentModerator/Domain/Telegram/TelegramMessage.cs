@@ -12,6 +12,9 @@ public class TelegramMessage
 
     public string? Caption { get; set; }
 
+    /// <summary>Set when this message answers another one - that is how a reply to the bot is spotted.</summary>
+    public TelegramMessage? ReplyToMessage { get; set; }
+
     /// <summary>Telegram puts photo captions in a separate field; treat both as the comment body.</summary>
     public string? Body => string.IsNullOrWhiteSpace(Text) ? Caption : Text;
 }

@@ -1,14 +1,19 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AICommentModerator.Application.Abstractions;
+using AICommentModerator.Application.Bot;
 using AICommentModerator.Application.Moderation;
 using AICommentModerator.Application.Options;
 using AICommentModerator.Infrastructure.Ai;
 using AICommentModerator.Infrastructure.Persistence;
 using AICommentModerator.Infrastructure.Telegram;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Behaviour of the bot itself lives in its own file, watched for changes.
+builder.Configuration.AddJsonFile("bot.config.json", optional: true, reloadOnChange: true);
 
 // ---- configuration -------------------------------------------------------
 builder.Services.AddOptions<TelegramOptions>()
@@ -21,6 +26,10 @@ builder.Services.AddOptions<OpenAiOptions>()
 
 builder.Services.AddOptions<ModerationOptions>()
     .Bind(builder.Configuration.GetSection(ModerationOptions.Section))
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<BotOptions>()
+    .Bind(builder.Configuration.GetSection(BotOptions.Section))
     .ValidateDataAnnotations();
 
 var openAi = builder.Configuration.GetSection(OpenAiOptions.Section).Get<OpenAiOptions>() ?? new OpenAiOptions();
@@ -49,12 +58,25 @@ if (openAi.IsConfigured)
         http.BaseAddress = new Uri(openAi.BaseUrl.EndsWith('/') ? openAi.BaseUrl : openAi.BaseUrl + "/");
         http.Timeout = TimeSpan.FromSeconds(openAi.TimeoutSeconds);
     });
+
+    builder.Services.AddHttpClient<IReplyGenerator, OpenAiReplyGenerator>(http =>
+    {
+        http.BaseAddress = new Uri(openAi.BaseUrl.EndsWith('/') ? openAi.BaseUrl : openAi.BaseUrl + "/");
+        http.Timeout = TimeSpan.FromSeconds(openAi.TimeoutSeconds);
+    });
 }
 else
 {
     // No API key: the rule engine alone keeps the service fully functional.
     builder.Services.AddSingleton<IModerationService>(sp => sp.GetRequiredService<RuleBasedModerationService>());
 }
+
+// ---- bot behaviour -------------------------------------------------------
+builder.Services.AddSingleton<BotPolicy>();
+builder.Services.AddSingleton<IReplyService>(sp => new ReplyService(
+    sp.GetRequiredService<BotPolicy>(),
+    sp.GetRequiredService<ILogger<ReplyService>>(),
+    sp.GetService<IReplyGenerator>()));
 
 // ---- telegram ------------------------------------------------------------
 builder.Services.AddHttpClient<ITelegramClient, TelegramClient>(http =>
@@ -65,6 +87,7 @@ builder.Services.AddHttpClient<ITelegramClient, TelegramClient>(http =>
 
 // ---- storage -------------------------------------------------------------
 var hasDatabase = !string.IsNullOrWhiteSpace(connectionString);
+
 builder.Services.AddSingleton<InMemoryAuditLog>();
 
 if (hasDatabase)
@@ -100,6 +123,19 @@ if (hasDatabase && app.Configuration.GetValue("Database:MigrateOnStartup", true)
     }
 }
 
+// ---- who am I ------------------------------------------------------------
+// Mention rules need the bot username; ask Telegram once unless the file states it.
+var botOptions = app.Services.GetRequiredService<IOptionsMonitor<BotOptions>>().CurrentValue;
+if (string.IsNullOrWhiteSpace(botOptions.Username) && telegram.IsConfigured)
+{
+    var identity = await app.Services.GetRequiredService<ITelegramClient>().GetMeAsync();
+    if (!string.IsNullOrWhiteSpace(identity))
+    {
+        botOptions.Username = identity;
+        app.Services.GetRequiredService<ILogger<Program>>().LogInformation("Bot username resolved as @{Username}", identity);
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -111,8 +147,9 @@ app.MapControllers();
 // ---- health --------------------------------------------------------------
 app.MapGet("/health", (IServiceProvider services) =>
 {
-    var openAiOptions = services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<OpenAiOptions>>().CurrentValue;
-    var telegramOptions = services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<TelegramOptions>>().CurrentValue;
+    var openAiOptions = services.GetRequiredService<IOptionsMonitor<OpenAiOptions>>().CurrentValue;
+    var telegramOptions = services.GetRequiredService<IOptionsMonitor<TelegramOptions>>().CurrentValue;
+    var bot = services.GetRequiredService<IOptionsMonitor<BotOptions>>().CurrentValue;
 
     return Results.Ok(new
     {
@@ -120,7 +157,9 @@ app.MapGet("/health", (IServiceProvider services) =>
         moderation = openAiOptions.IsConfigured ? "openai + rules" : "rules only",
         telegram = telegramOptions.IsConfigured ? "configured" : "token missing",
         storage = hasDatabase ? "postgres (falls back to memory)" : "in-memory",
-        webhookSecret = string.IsNullOrWhiteSpace(telegramOptions.WebhookSecret) ? "not set" : "set"
+        webhookSecret = string.IsNullOrWhiteSpace(telegramOptions.WebhookSecret) ? "not set" : "set",
+        replies = bot.Replies.Enabled ? bot.Replies.RespondTo : "off",
+        scope = bot.Scope.IsAllowlist ? $"allowlist ({bot.Scope.AllowedChatIds.Length} chats)" : "all chats"
     });
 });
 

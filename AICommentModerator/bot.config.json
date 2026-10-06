@@ -1,0 +1,85 @@
+﻿{
+  "//": "How this bot behaves. The file is watched: edits take effect without a restart.",
+
+  "Bot": {
+    "//Username": "Without the @. Leave empty and it is read from Telegram at startup.",
+    "Username": "",
+
+    "Scope": {
+      "//Mode": "AllChats = every chat the bot is added to. Allowlist = only AllowedChatIds.",
+      "Mode": "AllChats",
+      "AllowedChatIds": [],
+      "IgnoreBots": true,
+      "IgnoreChannelPosts": true,
+      "IgnoreEditedMessages": false
+    },
+
+    "Exempt": {
+      "//": "Admins, the team, trusted members - never deleted, never warned.",
+      "Usernames": [ "malika53" ],
+      "UserIds": [],
+      "SkipModeration": true
+    },
+
+    "Actions": {
+      "//": "What happens after each verdict.",
+      "OnBlock": { "Delete": true, "WarnAuthor": true, "NotifyModerators": true },
+      "OnFlag": { "Delete": false, "WarnAuthor": false, "NotifyModerators": true },
+      "OnAllow": { "Delete": false, "WarnAuthor": false, "NotifyModerators": false }
+    },
+
+    "Moderators": {
+      "//ChatId": "Chat that receives notifications. 0 = no notifications.",
+      "ChatId": 0,
+      "Template": "{decision}: {reason}\nAuthor: {author}\nChat: {chat}\nText: {text}",
+      "WarningTemplate": "A comment was removed: {reason}"
+    },
+
+    "Replies": {
+      "Enabled": true,
+      "//RespondTo": "Nobody | MentionsAndReplies | Everyone",
+      "RespondTo": "MentionsAndReplies",
+      "CooldownSeconds": 30,
+      "MaxRepliesPerChatPerHour": 20,
+      "//UseAiWhenNoRuleMatches": "Needs an OpenAI key; answers in the commenter's language.",
+      "UseAiWhenNoRuleMatches": false,
+
+      "Rules": [
+        {
+          "Name": "greeting",
+          "Match": "Keyword",
+          "Patterns": [ "salom", "assalomu", "hello", "privet", "Ð·Ð´Ñ€Ð°Ð²ÑÑ‚Ð²ÑƒÐ¹Ñ‚Ðµ" ],
+          "Reply": "Salom! Savolingizni yozing, javob beramiz."
+        },
+        {
+          "Name": "price",
+          "Match": "Regex",
+          "Patterns": [ "narx|qancha turadi|ÑÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÑ‚Ð¾Ð¸Ñ‚|price" ],
+          "Reply": "Narxlar haqida to'liq ma'lumotni shaxsiy xabarda yuboramiz."
+        },
+        {
+          "Name": "working-hours",
+          "Match": "Keyword",
+          "Patterns": [ "ish vaqti", "qachon ochiq", "Ð³Ñ€Ð°Ñ„Ð¸Ðº", "working hours" ],
+          "Reply": "Dushanba-juma, 9:00-18:00."
+        },
+        {
+          "Name": "thanks",
+          "Match": "Keyword",
+          "Patterns": [ "rahmat", "ÑÐ¿Ð°ÑÐ¸Ð±Ð¾", "thanks", "thank you" ],
+          "Reply": "Arzimaydi! Yana savol bo'lsa yozing."
+        }
+      ]
+    },
+
+    "PerChat": [
+      {
+        "//": "Example: a quieter, stricter chat. Remove or edit freely.",
+        "ChatId": -1001234567890,
+        "Enabled": true,
+        "RepliesEnabled": false,
+        "ExtraBannedWords": []
+      }
+    ]
+  }
+}
